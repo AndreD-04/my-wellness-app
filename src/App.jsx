@@ -4,38 +4,49 @@ import './App.css'
 function App() {
   const [recipe, setRecipe] = useState(null);
   const [banList, setBanList] = useState([]);
-  const [history, setHistory] = useState([]); // STRETCH: History state
-  
-  const API_KEY = '3b6ec44bc4a041a3afbb1c34a2be82f8'; 
+  const [history, setHistory] = useState([]);
 
   const fetchRecipe = async () => {
-    const url = `https://api.spoonacular.com/recipes/random?number=1&apiKey=${API_KEY}`;
+    // TheMealDB is free and doesn't require a complex API Key for random lookups
+    const url = `https://www.themealdb.com/api/json/v1/1/random.php`;
     
     try {
       const response = await fetch(url);
       const data = await response.json();
-      const newRecipe = data.recipes[0];
+      
+      if (!data.meals) return;
 
-      // Prepare attributes for checking
-      const recipeCuisine = newRecipe.cuisines[0] || "Healthy";
-      const recipeType = newRecipe.dishTypes[0] || "Main Dish";
-      const recipeTime = `${newRecipe.readyInMinutes} min`;
+      const newRecipe = data.meals[0];
 
-      // REQUIRED: Check if any attribute is in the banList
+      // Mapping TheMealDB attributes to your wellness app categories
+      const recipeCuisine = newRecipe.strArea || "International";
+      const recipeType = newRecipe.strCategory || "Main Dish";
+      // TheMealDB doesn't provide exact minutes, so we'll use a placeholder or skip
+      const recipeTag = newRecipe.strTags ? newRecipe.strTags.split(',')[0] : "Healthy";
+
+      // Check if any attribute is in the banList
       const isBanned = banList.includes(recipeCuisine) || 
                        banList.includes(recipeType) || 
-                       banList.includes(recipeTime);
+                       banList.includes(recipeTag);
 
       if (isBanned) {
-        console.log("Banned item detected, retrying...");
-        fetchRecipe(); 
+        console.log(`Skipping "${newRecipe.strMeal}" due to ban list.`);
+        await fetchRecipe(); 
       } else {
-        setRecipe(newRecipe);
-        // STRETCH: Add to history
-        setHistory((prev) => [newRecipe, ...prev]);
+        // We reshape the data slightly so the rest of your app keeps working
+        const formattedRecipe = {
+          title: newRecipe.strMeal,
+          image: newRecipe.strMealThumb,
+          cuisine: recipeCuisine,
+          type: recipeType,
+          tag: recipeTag
+        };
+        
+        setRecipe(formattedRecipe);
+        setHistory((prev) => [formattedRecipe, ...prev]);
       }
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Fetch Error:", error);
     }
   };
 
@@ -45,7 +56,6 @@ function App() {
     }
   };
 
-  // REQUIRED: Function to remove from ban list when clicked
   const removeFromBanList = (attr) => {
     setBanList(banList.filter((item) => item !== attr));
   };
@@ -61,7 +71,7 @@ function App() {
           <p className="hint">Click to unban</p>
           <div className="ban-list">
             {banList.map((item, index) => (
-              <button key={index} onClick={() => removeFromBanList(item)}>
+              <button key={index} className="ban-item-btn" onClick={() => removeFromBanList(item)}>
                 {item}
               </button>
             ))}
@@ -73,11 +83,11 @@ function App() {
           {recipe ? (
             <div className="recipe-card">
               <h2>{recipe.title}</h2>
-              <img src={recipe.image} alt={recipe.title} />
+              <img src={recipe.image} alt={recipe.title} style={{ width: '100%', borderRadius: '10px' }} />
               <div className="attribute-buttons">
-                <button onClick={() => addToBanList(recipe.dishTypes[0])}>{recipe.dishTypes[0]}</button>
-                <button onClick={() => addToBanList(recipe.cuisines[0] || "Healthy")}>{recipe.cuisines[0] || "Healthy"}</button>
-                <button onClick={() => addToBanList(`${recipe.readyInMinutes} min`)}>{recipe.readyInMinutes} min</button>
+                <button onClick={() => addToBanList(recipe.type)}>{recipe.type}</button>
+                <button onClick={() => addToBanList(recipe.cuisine)}>{recipe.cuisine}</button>
+                <button onClick={() => addToBanList(recipe.tag)}>{recipe.tag}</button>
               </div>
             </div>
           ) : (
@@ -88,7 +98,7 @@ function App() {
           <button className="discover-btn" onClick={fetchRecipe}>Discover!</button>
         </div>
 
-        {/* RIGHT: History (Stretch Feature) */}
+        {/* RIGHT: History */}
         <div className="history-sidebar">
           <h3>History</h3>
           <div className="history-list">
